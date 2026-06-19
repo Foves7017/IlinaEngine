@@ -1,8 +1,8 @@
-Ilina Engine 是一个以对话树为核心的 AI 聊天后端系统。支持树状对话、读写文件、MCP 和 Skills
 # IlinaEngine
+Ilina Engine 是一个以对话树为核心的 AI 聊天后端系统。支持树状对话、读写文件、MCP 和 Skills
 
 ## 重要说明
-当前版本（v0.7.6）还是一个开发中版本，许多功能也许不稳定，也有可能会增删接口，请务必注意。
+当前版本 (0.8.x) 还是一个开发中版本，许多功能也许不稳定，也有可能会增删接口，请务必注意。
 
 关于版本更新的详细内容请见后文。
 
@@ -15,6 +15,9 @@ pip install IlinaEngine
 
 你也可以前往这个页面，看看我为 Ilina Engine 开发的 GUI，然后直接使用。
 https://github.com/Foves7017/IlinaGUI
+
+本项目的地址：
+https://github.com/Foves7017/IlinaEngine
 
 # 配置 IlinaEngine
 首次启动后，IlinaEngine会使用默认配置创建 `./configs/ai.json`，你可以在启动前手动创建它，也可以启动后手动修改，但之后可能需要重新运行程序。
