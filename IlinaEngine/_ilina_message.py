@@ -14,9 +14,11 @@ class IlinaToolCall(BaseModel):
     arguments: str = ''
     tool_call_id: str = ''
 
+type IlinaMessageRoles = Literal['user', 'assistant', 'system', 'tool', 'error']
+
 class IlinaMessage(BaseModel):
     """ 对话消息 """
-    role: Literal['user', 'assistant', 'system', 'tool', 'error']
+    role: IlinaMessageRoles
     content: str = ''
     reasoning_content: str = ''  # 仅在 assistant 中使用
     tool_calls: list[IlinaToolCall] = []  # 仅在 assistant 中使用
