@@ -1,6 +1,5 @@
-setuptools<82
 FovesConfig
 FovesLog
 openai
 mcp
-win10toast
+win11toast

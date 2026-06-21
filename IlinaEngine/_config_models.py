@@ -32,3 +32,4 @@ class EngineConfig(BaseModel):
     mcps: dict[str, MCPConfig] = {}
     default_system_prompt_template: str = '当前工作目录为 {{workpath}}，当你编辑文件之后，你应该{{open_or_alarm}}'
     global_ignores: list[str] = ['.venv', '*.ilinatree', '.git', '.obsidian']
+    toast_icon_abs_path: str|None = None

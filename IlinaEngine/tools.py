@@ -9,7 +9,7 @@ import inspect
 from typing import Callable, get_type_hints
 from pathlib import Path
 from pydantic import create_model
-from win10toast import ToastNotifier
+from win11toast import toast
 from FovesConfig import ConfigLoader
 from openai.types.chat import ChatCompletionFunctionToolParam
 from openai.types.shared_params import FunctionDefinition
@@ -26,7 +26,6 @@ class InsideTools:
     """ 内置工具集合 """
     def __init__(self, tree: Tree) -> None:
         self.tree = tree
-        self.toaser = ToastNotifier()
 
         self.tool_table: dict[str, IlinaToolDefinition] = {}
         
@@ -38,7 +37,7 @@ class InsideTools:
         self.add_tool(self.write_to_file)
         self.add_tool(self.append_to_file)
         self.add_tool(self.get_datetime)
-        self.add_tool(self.alert)
+        self.add_tool(self.toast)
         self.add_tool(self.get_workspace_info)
         self.add_tool(self.get_user_profile)
         self.add_tool(self.add_user_profile)
@@ -106,20 +105,40 @@ class InsideTools:
         """
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
-    def alert(self, text: str) -> str:
+    def toast(self, 
+          body: str,
+          buttons: list[str] = [],
+          input: str|None = None,
+          selection: list[str]=[],
+          ) -> str:
         """ 向用户发送一个弹窗通知，只在需要引起用户注意时或完成用户给你的任务时使用，日常对话中不要使用，但撒娇时可以使用。
-        Args:
-            text (str): 通知内容
-
-        Returns:
-            str: 发送成功
+        @param body (str): 弹窗内容
+        @param buttons (list[str]): 在弹窗上的按钮，默认为空，不能超过5个。建议每个都非常短。
+        @param input (str): 弹窗上的输入框，默认为 None，如果是字符串则是输入提示，为 None 则不显示输入框
+        @param selection (list[str]): 弹窗上的选择框，默认为空，不能超过5个。
         """
-        ret = self.toaser.show_toast(
-            'ILINA',
-            text,
-            './configs/toast_icon.ico'
-        )
-        return f'发送成功, 弹窗返回 "{ret}"'
+
+        icon_filename = ConfigLoader('./configs/engine.json', EngineConfig).readonly().toast_icon_abs_path
+        if icon_filename != None:
+            if not Path(icon_filename).is_absolute():
+                return f'失败，你需要告诉用户配置中的 toast_icon_abs_path 必须为None或者是绝对路径，当前值为：{icon_filename}'
+            icon = str(icon_filename)
+        else:
+            icon = None
+        
+        if len(buttons) > 5:
+            return f'按钮数量不能超过 5 个'
+        if len(selection) > 5:
+            return f'选项数量不能超过 5 个'
+
+        res = toast('ILINA', body, 
+            icon=icon, 
+            buttons=buttons,
+            input=input,
+            selection=selection,
+            )
+
+        return f'发送成功, 弹窗返回：{res}'
 
     def get_workspace_info(self) -> str:
         """ 获取工作区信息，包括路径、记忆、用户偏好等

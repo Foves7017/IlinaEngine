@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "IlinaEngine"
-version = "0.8.3"
+version = "0.8.4"
 description = "Ilina Engine 是一个以对话树为核心的 AI 聊天后端系统。支持树状对话、读写文件、MCP 和 Skills"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -13,12 +13,11 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "setuptools<82",
     "FovesConfig",
     "FovesLog",
     "openai",
     "mcp",
-    "win10toast",
+    "win11toast",
 ]
 
 [project.urls]
