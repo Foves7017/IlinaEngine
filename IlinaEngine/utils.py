@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from fnmatch import fnmatch
 
@@ -28,3 +29,8 @@ def is_ignored(path: Path, ignore_list: list[str]) -> bool:
                 return True
 
     return False
+
+def app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent

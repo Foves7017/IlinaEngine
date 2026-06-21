@@ -1,19 +1,15 @@
 # 调用 API
-
-from enum import Enum
 from typing import Generator
 from logging import getLogger
-from dataclasses import dataclass
 from FovesConfig import ConfigLoader
 
-
-# from tools import Toolset
 from .tree import Node
 from .sync_mcp import MCPLoader
 from ._config_models import EngineConfig
 from .tools import InsideTools
 from .type import  NodeEvent, NodeEventTypes
 from ._ilina_message import IlinaMessage, IlinaToolCall
+from .utils import app_dir
 from openai import OpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -29,7 +25,7 @@ from openai.types.chat import (
 
 class OpenAIClient:
     def __init__(self, is_main_model: bool, mcp_loader: MCPLoader, inside_tools: InsideTools):
-        with ConfigLoader('./configs/engine.json', EngineConfig) as config:
+        with ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig) as config:
             if is_main_model:
                 modelcfg = config.main_model
             else:

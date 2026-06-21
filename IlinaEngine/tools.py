@@ -3,7 +3,6 @@ import os
 import re
 import time
 import json
-import shutil
 import inspect
 
 from typing import Callable, get_type_hints
@@ -16,11 +15,11 @@ from openai.types.shared_params import FunctionDefinition
 
 from .tree import Tree
 from .type import IlinaToolDefinition, IlinaToolCall
-from .utils import is_ignored
+from .utils import is_ignored, app_dir
 from .exceptions import ToolNotFoundError, IgnoredFile
 from ._config_models import IlinaConfig, EngineConfig
 
-USER_PROFILE_PATH = './configs/user_profile.json'
+USER_PROFILE_PATH = app_dir()/'configs'/'user_profile.json'
 
 class InsideTools:
     """ 内置工具集合 """
@@ -118,7 +117,7 @@ class InsideTools:
         @param selection (list[str]): 弹窗上的选择框，默认为空，不能超过5个。
         """
 
-        icon_filename = ConfigLoader('./configs/engine.json', EngineConfig).readonly().toast_icon_abs_path
+        icon_filename = ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig).readonly().toast_icon_abs_path
         if icon_filename != None:
             if not Path(icon_filename).is_absolute():
                 return f'失败，你需要告诉用户配置中的 toast_icon_abs_path 必须为None或者是绝对路径，当前值为：{icon_filename}'
@@ -363,7 +362,7 @@ class InsideTools:
         )
 
     def _check_ignore(self, path: Path):
-        ignores = [*ConfigLoader('./configs/engine.json', EngineConfig).readonly().global_ignores]
+        ignores = [*ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig).readonly().global_ignores]
         config_filename = self.tree.workpath / '.ilina' / '.ilinaconfig'
         if config_filename.exists():
             ignores.extend(ConfigLoader(config_filename, IlinaConfig).readonly().ignores)

@@ -10,6 +10,7 @@ from openai.types.chat import ChatCompletionFunctionToolParam
 from openai.types.shared_params import FunctionDefinition
 from FovesConfig import ConfigLoader
 
+from .utils import app_dir
 from ._ilina_message import IlinaToolDefinition, IlinaToolCall
 from ._config_models import EngineConfig
 from FovesLog import LoggedTask
@@ -141,7 +142,7 @@ class MCPLoader:
         self.log.setLevel(logging.INFO)
         #  从配置中读取MCP工具
         self.clients: dict[str, SyncMcpClient] = {}
-        with ConfigLoader('./configs/engine.json', EngineConfig) as config:
+        with ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig) as config:
             with LoggedTask('加载 MCP 服务', logger=self.log) as task:
                 try:
                     for mcp_name in config.mcps:
