@@ -8,6 +8,7 @@ from .tree import Tree, Node
 from .call_openai import *
 from ._ilina_message import IlinaMessage
 from .exceptions import *
+from .tools import InsideTools
 
 class Engine:
     def __init__(self, filename: str) -> None:
@@ -17,9 +18,11 @@ class Engine:
         with LoggedTask('初始化', logger=self.log) as task:
             self.tree = Tree(filename)
             task.checkpoint(f'建立文件树')
+            self.instde_tools = InsideTools(self.tree)
+            task.checkpoint(f'建立内置工具组')
             self.mcp_loader = MCPLoader()
             task.checkpoint(f'建立MCP工具')
-            self.main_model = OpenAIClient(True, self.mcp_loader)
+            self.main_model = OpenAIClient(True, self.mcp_loader, self.instde_tools)
     
     @property
     def workpath(self) -> str:
@@ -75,11 +78,19 @@ class Engine:
             raise ParentNotFoundError(uuid)
 
     def edit_node(self, target: UUID, new_message: IlinaMessage) -> UUID:
-        """ 修改节点内容，不会实际修改，而是作为父节点的新子节点插入，会返回新节点的 UUID """
-        new_node = Node(new_message)
-        with self.tree as tree:
-            tree.insert(new_node, self.get_parent(target))
-        return new_node.uuid
+        """ 修改节点内容，不会实际修改，而是作为父节点的新子节点插入，会返回新节点的 UUID
+            如果是修改系统节点，就直接修改
+        """
+
+        if target == self.tree.root_node.uuid:
+            with self.tree as tree:
+                tree.root_node.message = new_message
+            return target
+        else:
+            new_node = Node(new_message)
+            with self.tree as tree:
+                tree.insert(new_node, self.get_parent(target))
+            return new_node.uuid
 
     def invoke(self, start_from: UUID|None=None) -> Generator[NodeEvent, bool, None]:
         """ 将当前的对话发送给主模型，并获取其回复，默认从最新分支开始

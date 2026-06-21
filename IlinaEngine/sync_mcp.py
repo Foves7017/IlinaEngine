@@ -11,7 +11,7 @@ from openai.types.shared_params import FunctionDefinition
 from FovesConfig import ConfigLoader
 
 from ._ilina_message import IlinaToolDefinition, IlinaToolCall
-from ._config_models import AIConfig
+from ._config_models import EngineConfig
 from FovesLog import LoggedTask
 
 class SyncMcpClient:
@@ -141,7 +141,7 @@ class MCPLoader:
         self.log.setLevel(logging.INFO)
         #  从配置中读取MCP工具
         self.clients: dict[str, SyncMcpClient] = {}
-        with ConfigLoader('./configs/ai.json', AIConfig) as config:
+        with ConfigLoader('./configs/engine.json', EngineConfig) as config:
             with LoggedTask('加载 MCP 服务', logger=self.log) as task:
                 try:
                     for mcp_name in config.mcps:

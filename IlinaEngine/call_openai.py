@@ -10,7 +10,9 @@ from FovesConfig import ConfigLoader
 # from tools import Toolset
 from .tree import Node
 from .sync_mcp import MCPLoader
-from ._config_models import AIConfig
+from ._config_models import EngineConfig
+from .tools import InsideTools
+from .type import  NodeEvent, NodeEventTypes
 from ._ilina_message import IlinaMessage, IlinaToolCall
 from openai import OpenAI
 from openai.types.chat import (
@@ -19,34 +21,23 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
-
+    ChatCompletionFunctionToolParam,
     ChatCompletionMessageParam,
     ChatCompletionChunk,
     ChatCompletion,
 )
 
-class NodeEventTypes(str, Enum):
-    CREATED = 'CREATED'
-    UPDATED = 'UPDATED'
-    FINISNED = 'FINISHED'
-    ERROR = 'ERROR'
-
-@dataclass
-class NodeEvent:
-    """ 节点发生变化的事件 """
-    node: Node
-    _type: NodeEventTypes
-
 class OpenAIClient:
-    def __init__(self, is_main_model: bool, mcp_loader: MCPLoader):
-        with ConfigLoader('./configs/ai.json', AIConfig) as config:
+    def __init__(self, is_main_model: bool, mcp_loader: MCPLoader, inside_tools: InsideTools):
+        with ConfigLoader('./configs/engine.json', EngineConfig) as config:
             if is_main_model:
                 modelcfg = config.main_model
             else:
                 modelcfg = config.sub_model
+
         self.client = OpenAI(base_url=modelcfg.base_url, api_key=modelcfg.api_key)
         self.model = modelcfg.model_name
-        # self.toolset = Toolset()
+        self.inside_tools = inside_tools
         self.mcp_loader = mcp_loader
         self.log = getLogger(f"Model_{self.model}")
     
@@ -98,6 +89,12 @@ class OpenAIClient:
         elif ilina.role == 'error':
             return None
 
+    def get_tools(self) -> list[ChatCompletionFunctionToolParam]:
+        """ 返回 MCP 工具和内置工具 """
+        mcp_tools = self.mcp_loader.get_list_openai()
+        inside_tools = self.inside_tools.get_list_openai()
+        return inside_tools + mcp_tools
+
     def chat(self, messages: list[IlinaMessage]) -> Generator[NodeEvent, None, None]:
         """ 调用模型，会首先用生成器返回流失输出结果，最后return合并的Node """
         new_messages: list[IlinaMessage] = []  # 存储本轮调用生成的消息
@@ -117,7 +114,7 @@ class OpenAIClient:
                 res = self.client.chat.completions.create(
                     messages=openai_messages,
                     model=self.model,
-                    tools=self.mcp_loader.get_list_openai(),
+                    tools=self.get_tools(),
                     stream=True
                 ) 
             except Exception as e:
@@ -198,7 +195,10 @@ class OpenAIClient:
             # 返回流式传输的工具块
             for call in assistant_node.message.tool_calls:
                 self.log.info(f'调用工具 {call.name}')
-                result = self.mcp_loader.call(call)
+                if call.name in self.inside_tools:
+                    result = self.inside_tools.call(call)
+                else:
+                    result = self.mcp_loader.call(call)
                 self.log.info(f'工具返回 {result}')
                 # 根据 ID 获取对应的节点并进行修改和发送
                 tool_call_node = tool_call_nodes[call.tool_call_id]
