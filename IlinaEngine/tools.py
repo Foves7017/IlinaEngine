@@ -182,22 +182,25 @@ class InsideTools:
         """ 列出文件夹的内容，可以指定相对路径
         @param path (str): 文件夹路径，相对于工作目录，默认为 '.'
         """
-        content = f'{path} 的内容:\n'
-        for name in os.listdir(self.tree.workpath / path):
-            fullpath = self.tree.workpath / path / name
+        try:
+            content = f'{path} 的内容:\n'
+            for name in os.listdir(self.tree.workpath / path):
+                fullpath = self.tree.workpath / path / name
 
-            try:
-                self._check_ignore(fullpath)
-            except IgnoredFile:
-                continue
+                try:
+                    self._check_ignore(fullpath)
+                except IgnoredFile:
+                    continue
 
-            if os.path.isfile(fullpath):
-                content += '  文件：'
-            else:
-                content += '  文件夹：'
-            content += name
-            content += '\n'
-        return content
+                if os.path.isfile(fullpath):
+                    content += '  文件：'
+                else:
+                    content += '  文件夹：'
+                content += name
+                content += '\n'
+            return content
+        except Exception as e:
+            return repr(e)
     
     def read_file(self, filename: str, encoding: str='UTF8', start_chara: int|None=None, end_chara: int|None=None) -> str:
         """ 读取文件

@@ -15,14 +15,19 @@ class Engine:
         self.log = logging.getLogger('对话引擎')
         self.log.setLevel(logging.INFO)
 
+        # 保存警告消息的列表
+        self.warning_list: list[str] = []
+
         with LoggedTask('初始化', logger=self.log) as task:
             self.tree = Tree(filename)
-            task.checkpoint(f'建立文件树')
+            task.checkpoint(f'建立文件树完成')
             self.instde_tools = InsideTools(self.tree)
-            task.checkpoint(f'建立内置工具组')
+            task.checkpoint(f'建立内置工具组完成')
             self.mcp_loader = MCPLoader()
-            task.checkpoint(f'建立MCP工具')
+            self.warning_list.extend(self.mcp_loader.warning_list)
+            task.checkpoint(f'建立MCP工具完成')
             self.main_model = OpenAIClient(True, self.mcp_loader, self.instde_tools)
+            task.checkpoint(f'建立主模型完成')
     
     @property
     def workpath(self) -> str:

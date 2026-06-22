@@ -26,6 +26,7 @@ class SyncMcpClient:
         self._thread: threading.Thread|None = None
         self._session: ClientSession|None = None
         self._ready = threading.Event()
+        self._error = threading.Event()
         self._ctx = None
         self.name = name
         self.log = logging.getLogger('MCP Client')
@@ -59,27 +60,37 @@ class SyncMcpClient:
         #     # 连接完成后，事件循环继续跑，处理后续调用
         #     self._loop.run_forever()
 
+        exc: Exception|None = None
+
         def _run_loop():
+            nonlocal exc
             try:
                 self._loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self._loop)
                 self._loop.run_until_complete(_connect())
                 self._loop.run_forever()
 
-            except Exception:
+            except Exception as e:
                 import traceback
-                traceback.print_exc()
-
-                self.log.exception("MCP启动失败")
-
+                self.log.error(f"MCP启动失败: {repr(e)}\n{traceback.format_exc()}")
+                self._error.set()
+                exc = e
+            finally:
                 self._ready.set()
 
         self._thread = threading.Thread(target=_run_loop, daemon=True)
         self._thread.start()
         # self._ready.wait()  # 阻塞直到连接完成
-        if not self._ready.wait(timeout=10):
+        if not self._ready.wait(timeout=5):
+            self.log.error(f"MCP连接超时")
             raise TimeoutError("MCP连接超时")
-
+        if self._error.is_set():
+            self.log.error(f"MCP 初始化出错")
+            self.log.error(f"{repr(exc)=}")
+            if exc:
+                raise exc
+            else:
+                raise RuntimeError('MCP 初始化出错')
     # ── 工具列表 ──────────────────────────────
     def list_tools(self) -> list[IlinaToolDefinition]:
         """同步获取工具列表"""
@@ -157,16 +168,31 @@ class MCPLoader:
     def __init__(self):
         self.log = logging.getLogger(f'MCP Loader')
         self.log.setLevel(logging.INFO)
+        # 保存警告消息的列表，应该在创建后被追加到engine的同名列表里
+        self.warning_list: list[str] = []
         #  从配置中读取MCP工具
         self.clients: dict[str, SyncMcpClient] = {}
         with ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig) as config:
             with LoggedTask('加载 MCP 服务', logger=self.log) as task:
                 try:
                     for mcp_name in config.mcps:
-                        self.clients[mcp_name] = SyncMcpClient(mcp_name)
-                        self.clients[mcp_name].connect(config.mcps[mcp_name].command, config.mcps[mcp_name].args)
+                        try:
+                            self.clients[mcp_name] = SyncMcpClient(mcp_name)
+                            self.clients[mcp_name].connect(config.mcps[mcp_name].command, config.mcps[mcp_name].args)
+                        except Exception as e:
+                            if mcp_name in self.clients:
+                                del self.clients[mcp_name]
+                            self.log.error(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
+                            self.warning_list.append(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
                 except TypeError:
                     self.clients = {}
+        
+        log_string = '当前配置的 MCP 服务情况如下：\n'
+        for mcp_name in self.clients:
+            log_string += f'{mcp_name}:\n'
+            for tool in self.clients[mcp_name].list_tools():
+                log_string += f'  {tool.name}\n'
+        self.log.info(log_string)
     
     def get_list_openai(self) -> list[ChatCompletionFunctionToolParam]:
         """ 返回可以传给OpenAI模型调用的列表 """

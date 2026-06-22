@@ -1,6 +1,7 @@
 .obsidian
 MyGo.py
 .ilina
+configs
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -191,10 +191,13 @@ class OpenAIClient:
             # 返回流式传输的工具块
             for call in assistant_node.message.tool_calls:
                 self.log.info(f'调用工具 {call.name}')
-                if call.name in self.inside_tools:
-                    result = self.inside_tools.call(call)
-                else:
-                    result = self.mcp_loader.call(call)
+                try:
+                    if call.name in self.inside_tools:
+                        result = self.inside_tools.call(call)
+                    else:
+                        result = self.mcp_loader.call(call)
+                except Exception as e:
+                    result = repr(e)
                 self.log.info(f'工具返回 {result}')
                 # 根据 ID 获取对应的节点并进行修改和发送
                 tool_call_node = tool_call_nodes[call.tool_call_id]
