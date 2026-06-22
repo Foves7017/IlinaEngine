@@ -33,4 +33,4 @@ def is_ignored(path: Path, ignore_list: list[str]) -> bool:
 def app_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
+    return Path('.')

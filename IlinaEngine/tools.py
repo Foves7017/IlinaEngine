@@ -41,6 +41,18 @@ class InsideTools:
         self.add_tool(self.get_user_profile)
         self.add_tool(self.add_user_profile)
         self.add_tool(self.delete_user_profile)
+        self.add_tool(self.create_folder)
+    
+    def create_folder(self, path: str) -> str:
+        """ 创建文件夹，需要使用相对路径
+        @param path (str): 文件夹路径，需要是相对路径
+        """
+        try:
+            path_ = self.tree.workpath / path
+            path_.mkdir(parents=True, exist_ok=True)
+            return '创建成功'
+        except Exception as e:
+            return repr(e)
     
     def get_user_profile(self) -> str:
         """ 获取当前的用户印象 """

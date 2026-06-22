@@ -52,16 +52,33 @@ class SyncMcpClient:
             await self._session.initialize()
             self._ready.set()  # 通知主线程：好了
 
+        # def _run_loop():
+        #     self._loop = asyncio.new_event_loop()
+        #     asyncio.set_event_loop(self._loop)
+        #     self._loop.run_until_complete(_connect())
+        #     # 连接完成后，事件循环继续跑，处理后续调用
+        #     self._loop.run_forever()
+
         def _run_loop():
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-            self._loop.run_until_complete(_connect())
-            # 连接完成后，事件循环继续跑，处理后续调用
-            self._loop.run_forever()
+            try:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+                self._loop.run_until_complete(_connect())
+                self._loop.run_forever()
+
+            except Exception:
+                import traceback
+                traceback.print_exc()
+
+                self.log.exception("MCP启动失败")
+
+                self._ready.set()
 
         self._thread = threading.Thread(target=_run_loop, daemon=True)
         self._thread.start()
-        self._ready.wait()  # 阻塞直到连接完成
+        # self._ready.wait()  # 阻塞直到连接完成
+        if not self._ready.wait(timeout=10):
+            raise TimeoutError("MCP连接超时")
 
     # ── 工具列表 ──────────────────────────────
     def list_tools(self) -> list[IlinaToolDefinition]:

@@ -42,3 +42,20 @@
 
 目前只支持 stdio 方式调用 MCP。
 
+mcp 配置示例如下：
+```JSON
+"mcps": {
+    "FovesList": {
+      "command": "D:/Find-A-Way-VII/FovesList/.venv/Scripts/pythonw.exe",
+      "args": [
+        "D:/Find-A-Way-VII/FovesList/mcp_stdio.py"
+      ]
+    },
+    "IlinaMCP": {
+      "command": "D:/Find-A-Way-VII/ILINA/MCP/.venv/Scripts/pythonw.exe",
+      "args": [
+        "D:/Find-A-Way-VII/ILINA/MCP/main.py"
+      ]
+    }
+  }
+```
