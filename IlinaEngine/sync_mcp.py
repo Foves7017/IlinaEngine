@@ -4,13 +4,14 @@ import asyncio
 import threading
 import logging
 
+from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from openai.types.chat import ChatCompletionFunctionToolParam
 from openai.types.shared_params import FunctionDefinition
 from FovesConfig import ConfigLoader
 
-from .utils import app_dir
+from .utils import ENGINE_CONFIG_PATH
 from ._ilina_message import IlinaToolDefinition, IlinaToolCall
 from ._config_models import EngineConfig
 from FovesLog import LoggedTask
@@ -33,17 +34,20 @@ class SyncMcpClient:
         logging.getLogger('mcp').setLevel(logging.DEBUG)
 
     # ── 连接 ──────────────────────────────────
-    def connect(self, command: str, args: list[str]):
+    def connect(self, command: str, args: list[str], cwd: str, env: dict[str, str] = {}):
         """
         启动后台线程，连接 MCP Server。
         调用会阻塞直到握手完成。
         """
 
         async def _connect():
+            env["PYTHONUNBUFFERED"] = "1" # 禁用 stdout 缓冲，确保 JSON-RPC 响应即时发送
+
             server_params = StdioServerParameters(
                 command=command,
                 args=args,
-                env={"PYTHONUNBUFFERED": "1"},  # 禁用 stdout 缓冲，确保 JSON-RPC 响应即时发送
+                env=env,
+                cwd=cwd
             )
             # 注意：不能用 async with，因为要跨调用保持连接
             self._ctx = stdio_client(server_params)
@@ -80,8 +84,9 @@ class SyncMcpClient:
 
         self._thread = threading.Thread(target=_run_loop, daemon=True)
         self._thread.start()
-        # self._ready.wait()  # 阻塞直到连接完成
-        if not self._ready.wait(timeout=5):
+        # 从配置中读取 timeout
+        timeout = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly().mcp_timeout
+        if not self._ready.wait(timeout=timeout):
             self.log.error(f"MCP连接超时")
             raise TimeoutError("MCP连接超时")
         if self._error.is_set():
@@ -165,27 +170,35 @@ class SyncMcpClient:
 
 class MCPLoader:
     ''' 负责管理和调用 MCP 工具 '''
-    def __init__(self):
+    def __init__(self, workpath: Path):
         self.log = logging.getLogger(f'MCP Loader')
         self.log.setLevel(logging.INFO)
         # 保存警告消息的列表，应该在创建后被追加到engine的同名列表里
         self.warning_list: list[str] = []
         #  从配置中读取MCP工具
         self.clients: dict[str, SyncMcpClient] = {}
-        with ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig) as config:
-            with LoggedTask('加载 MCP 服务', logger=self.log) as task:
-                try:
-                    for mcp_name in config.mcps:
-                        try:
-                            self.clients[mcp_name] = SyncMcpClient(mcp_name)
-                            self.clients[mcp_name].connect(config.mcps[mcp_name].command, config.mcps[mcp_name].args)
-                        except Exception as e:
-                            if mcp_name in self.clients:
-                                del self.clients[mcp_name]
-                            self.log.error(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
-                            self.warning_list.append(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
-                except TypeError:
-                    self.clients = {}
+        config = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly()
+        with LoggedTask('加载 MCP 服务', logger=self.log) as task:
+            try:
+                for mcp_name in config.mcps:
+                    if mcp_name in config.mcp_ignored:
+                        self.log.info(f'配置文件指定跳过了加载 {mcp_name}')
+                        continue
+                    try:
+                        self.clients[mcp_name] = SyncMcpClient(mcp_name)
+                        self.clients[mcp_name].connect(
+                            command=config.mcps[mcp_name].command, 
+                            args=config.mcps[mcp_name].args,
+                            cwd=str(workpath),
+                            env=config.mcps[mcp_name].env)
+                        task.checkpoint(f'已加载 {mcp_name}')
+                    except Exception as e:
+                        if mcp_name in self.clients:
+                            del self.clients[mcp_name]
+                        self.log.error(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
+                        self.warning_list.append(f'加载 MCP 服务 [{mcp_name}] 时出现错误: {repr(e)}, 已跳过加载')
+            except TypeError:
+                self.clients = {}
         
         log_string = '当前配置的 MCP 服务情况如下：\n'
         for mcp_name in self.clients:

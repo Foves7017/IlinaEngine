@@ -9,6 +9,7 @@ class IlinaConfig(BaseModel):
 class MCPConfig(BaseModel):
     command: str
     args: list[str]
+    env: dict[str, str] = {}
 
 class ModelConfig(BaseModel):
     base_url: str
@@ -29,7 +30,10 @@ class EngineConfig(BaseModel):
         model_name='qwen3-vl:4b'
     )
 
-    mcps: dict[str, MCPConfig] = {}
     default_system_prompt_template: str = '当前工作目录为 {{workpath}}，当你编辑文件之后，你应该{{open_or_alarm}}'
     global_ignores: list[str] = ['.venv', '*.ilinatree', '.git', '.obsidian']
-    toast_icon_abs_path: str|None = None
+    toast_icon_abs_path: str|None = None  # 弹窗图标位置
+
+    mcps: dict[str, MCPConfig] = {}
+    mcp_timeout: int = 10  # MCP 连接超时时间
+    mcp_ignored: list[str] = []  # 跳过加载的 MCP

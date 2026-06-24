@@ -23,7 +23,7 @@ class Engine:
             task.checkpoint(f'建立文件树完成')
             self.instde_tools = InsideTools(self.tree)
             task.checkpoint(f'建立内置工具组完成')
-            self.mcp_loader = MCPLoader()
+            self.mcp_loader = MCPLoader(self.tree.workpath)
             self.warning_list.extend(self.mcp_loader.warning_list)
             task.checkpoint(f'建立MCP工具完成')
             self.main_model = OpenAIClient(True, self.mcp_loader, self.instde_tools)

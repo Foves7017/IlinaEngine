@@ -15,7 +15,7 @@ from openai.types.shared_params import FunctionDefinition
 
 from .tree import Tree
 from .type import IlinaToolDefinition, IlinaToolCall
-from .utils import is_ignored, app_dir
+from .utils import ENGINE_CONFIG_PATH, is_ignored, app_dir
 from .exceptions import ToolNotFoundError, IgnoredFile
 from ._config_models import IlinaConfig, EngineConfig
 
@@ -129,7 +129,7 @@ class InsideTools:
         @param selection (list[str]): 弹窗上的选择框，默认为空，不能超过5个。
         """
 
-        icon_filename = ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig).readonly().toast_icon_abs_path
+        icon_filename = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly().toast_icon_abs_path
         if icon_filename != None:
             if not Path(icon_filename).is_absolute():
                 return f'失败，你需要告诉用户配置中的 toast_icon_abs_path 必须为None或者是绝对路径，当前值为：{icon_filename}'
@@ -228,13 +228,19 @@ class InsideTools:
         """
         try:
             filepath = self.tree.workpath / filename
+
             self._check_ignore(filepath)
+            
             ret = ''
             with open(filepath, 'r', encoding=encoding) as f:
                 content = f.read()
                 for m in re.finditer(pattern, content):
                     ret += f'在字符{m.start()}-{m.end()}处匹配到：{m.group()}\n'
             return ret
+        
+        except UnicodeDecodeError:
+            return 'UnicodeDecodeError'
+        
         except Exception as e:
             return repr(e)
 
@@ -273,9 +279,11 @@ class InsideTools:
             self._check_ignore(filepath)
             with open(filepath, 'r', encoding=encoding) as f:
                 content = f.read()
-            content = re.sub(pattern, repl, content, count)
+            new_content = re.sub(pattern, repl, content, count)
+            if new_content == content:
+                return '替换失败（替换后字符串等于原字符串）'
             with open(filepath, 'w', encoding=encoding) as f:
-                f.write(content)
+                f.write(new_content)
             if open_after_finish:
                 os.startfile(filepath)
             return '替换完成'
@@ -377,7 +385,7 @@ class InsideTools:
         )
 
     def _check_ignore(self, path: Path):
-        ignores = [*ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig).readonly().global_ignores]
+        ignores = [*ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly().global_ignores]
         config_filename = self.tree.workpath / '.ilina' / '.ilinaconfig'
         if config_filename.exists():
             ignores.extend(ConfigLoader(config_filename, IlinaConfig).readonly().ignores)

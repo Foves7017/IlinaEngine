@@ -34,3 +34,5 @@ def app_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path('.')
+
+ENGINE_CONFIG_PATH = app_dir()/'configs'/'engine.json'

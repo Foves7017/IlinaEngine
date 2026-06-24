@@ -9,7 +9,7 @@ from ._config_models import EngineConfig
 from .tools import InsideTools
 from .type import  NodeEvent, NodeEventTypes
 from ._ilina_message import IlinaMessage, IlinaToolCall
-from .utils import app_dir
+from .utils import ENGINE_CONFIG_PATH
 from openai import OpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -25,7 +25,7 @@ from openai.types.chat import (
 
 class OpenAIClient:
     def __init__(self, is_main_model: bool, mcp_loader: MCPLoader, inside_tools: InsideTools):
-        with ConfigLoader(app_dir()/'configs'/'engine.json', EngineConfig) as config:
+        with ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig) as config:
             if is_main_model:
                 modelcfg = config.main_model
             else:
