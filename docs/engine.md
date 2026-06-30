@@ -104,3 +104,31 @@ System
 `Engine.delete_node(self, uuid: UUID)`
 删除指定节点。
 注意：会连同该节点所具有的分支也一并删除，且没有确认，调用此函数时需要小心。
+### 获取工具信息
+`Engine.get_tool_info() -> list[ToolInfo]`
+获取当前所有工具的详细信息，返回一个 [`ToolInfo`](type.md) 列表。每个 `ToolInfo` 包含：
+- `name`：MCP 名称，如果是内置工具组则为 `"inside"`
+- `is_ignored`：该 MCP 是否被禁用（未加载）
+- `tools`：该 MCP 下的所有工具名列表（若 MCP 被禁用则为空）
+- `disabled_tools`：该 MCP 下被单独禁用的工具名列表
+
+此方法可用于检查当前有哪些 MCP 已加载、哪些工具处于可用状态。
+### 设置 MCP 禁用状态
+`Engine.mcp_set_disable(mcp_name: str, disable: bool)`
+设置某个 MCP 是否禁用。`disable` 为 `True` 时禁用该 MCP，为 `False` 时启用。
+注意：此方法只修改配置文件，需要调用 [`reload_mcp`](#重新加载-mcp-服务) 才能生效。
+### 设置工具禁用状态
+`Engine.tool_set_disable(mcp_name: str, tool_name: str, disable: bool)`
+设置某个 MCP 下的特定工具是否禁用。`disable` 为 `True` 时禁用该工具，为 `False` 时启用。
+
+如果要设置内置工具的禁用状态，`mcp_name` 应传入 `"inside"`。
+
+注意：此方法只修改配置文件，需要调用 [`reload_mcp`](#重新加载-mcp-服务) 才能生效。如果修改的是内置工具，则此方法内部会立即重建内置工具组，无需额外调用 `reload_mcp`。
+### 重新加载 MCP 服务
+`Engine.reload_mcp()`
+重新加载所有 MCP 服务和内部工具，并刷新主模型的工具列表。
+
+通常在调用 [`mcp_set_disable`](#设置-mcp-禁用状态) 或 [`tool_set_disable`](#设置工具禁用状态) 后调用此方法，使配置变更生效。此方法会：
+1. 重新构建内置工具组
+2. 重新扫描并加载所有 MCP 服务
+3. 将新的工具列表同步给主模型

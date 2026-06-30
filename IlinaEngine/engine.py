@@ -9,6 +9,7 @@ from .call_openai import *
 from ._ilina_message import IlinaMessage
 from .exceptions import *
 from .tools import InsideTools
+from .type import ToolInfo
 
 class Engine:
     def __init__(self, filename: str) -> None:
@@ -21,14 +22,15 @@ class Engine:
         with LoggedTask('初始化', logger=self.log) as task:
             self.tree = Tree(filename)
             task.checkpoint(f'建立文件树完成')
-            self.instde_tools = InsideTools(self.tree)
+            self.instde_tools = InsideTools(self.tree.workpath)
+            self.warning_list.extend(self.instde_tools._warning_list)
             task.checkpoint(f'建立内置工具组完成')
             self.mcp_loader = MCPLoader(self.tree.workpath)
             self.warning_list.extend(self.mcp_loader.warning_list)
             task.checkpoint(f'建立MCP工具完成')
             self.main_model = OpenAIClient(True, self.mcp_loader, self.instde_tools)
             task.checkpoint(f'建立主模型完成')
-    
+
     @property
     def workpath(self) -> str:
         """ 获取工作目录 """
@@ -69,6 +71,65 @@ class Engine:
     def readonly_now_node(self) -> UUID:
         """ 获取当前最新节点的 UUID """
         return self.tree.root_node._get_now().uuid
+
+    def get_tool_info(self) -> list[ToolInfo]:
+        """ 获取当前工具的详细信息 """
+        total: list[ToolInfo] = []
+
+        cfg = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly()
+        total.append(ToolInfo('inside', False, self.instde_tools._name_list(), cfg.disabled_inside_tools))
+
+        loaded_mcps = self.mcp_loader.list_mcps()
+
+        for mcp in cfg.mcps:
+            if mcp in loaded_mcps:
+                total.append(ToolInfo(mcp, False, self.mcp_loader.list_tools(mcp), cfg.mcps[mcp].disabled_tools))
+            else:
+                total.append(ToolInfo(mcp, True, [], []))
+        
+        return total
+
+    def mcp_set_disable(self, mcp_name: str, disable: bool):
+        """ 设置某个MCP是否禁用，disable 为 True 就是禁用，False 就是启用 """
+        with ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig) as config:
+            if disable and mcp_name not in config.mcp_ignored:
+                config.mcp_ignored.append(mcp_name)
+            elif not disable and mcp_name in config.mcp_ignored:
+                index = config.mcp_ignored.index(mcp_name)
+                del config.mcp_ignored[index] 
+    
+    def tool_set_disable(self, mcp_name: str, tool_name: str, disable: bool):
+        """ 设置MCP的某个工具是否禁用，也可以用来设置内置工具，设置内置工具时 mcp_name 应该为 inside
+        disable 为 True 就是禁用，False 就是启用
+        """
+        with ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig) as config:
+            if mcp_name == 'inside':
+                if disable and tool_name not in config.disabled_inside_tools:
+                    config.disabled_inside_tools.append(tool_name)
+                elif not disable and tool_name in config.disabled_inside_tools:
+                    index = config.disabled_inside_tools.index(tool_name)
+                    del config.disabled_inside_tools[index]
+            else:
+                try:
+                    if disable and tool_name not in config.mcps[mcp_name].disabled_tools:
+                        config.mcps[mcp_name].disabled_tools.append(tool_name)
+                    elif not disable and tool_name in config.mcps[mcp_name].disabled_tools:
+                        index = config.mcps[mcp_name].disabled_tools.index(tool_name)
+                        del config.mcps[mcp_name].disabled_tools[index]
+                except KeyError:
+                    raise MCPNotFoundError(mcp_name)
+    
+    def reload_mcp(self):
+        """ 重新加载 MCP 服务和内部工具 """
+        with LoggedTask('重新加载 MCP 和内部工具', logger=self.log) as task:
+            self.instde_tools = InsideTools(self.tree.workpath)
+            task.checkpoint(f'建立内置工具组完成')
+            self.mcp_loader = MCPLoader(self.tree.workpath)
+            self.warning_list.extend(self.mcp_loader.warning_list)
+            task.checkpoint(f'建立MCP工具完成')
+            self.main_model.set_tools(self.mcp_loader, self.instde_tools)
+            task.checkpoint(f'刷新主模型完成')
+
 
     def get_message_by_uuid(self, uuid: UUID) -> IlinaMessage:
         """ 通过 UUID 获取消息内容 """

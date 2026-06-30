@@ -3,3 +3,4 @@ FovesLog
 openai
 mcp
 win11toast
+pyyaml

@@ -36,7 +36,12 @@ class OpenAIClient:
         self.inside_tools = inside_tools
         self.mcp_loader = mcp_loader
         self.log = getLogger(f"Model_{self.model}")
-    
+
+    def set_tools(self, mcp_loader: MCPLoader, inside_tools: InsideTools):
+        """ 重设新的 MCP Loader 和内置工具 """
+        self.inside_tools = inside_tools
+        self.mcp_loader = mcp_loader
+
     def ilina_to_openai(self, ilina: IlinaMessage) -> ChatCompletionMessageParam|None:
         """ 将 IlinaMessage 转化为  ChatCompletionMessageParam, 会过滤掉 error 类型"""
         if ilina.role == 'assistant':
@@ -88,7 +93,7 @@ class OpenAIClient:
     def get_tools(self) -> list[ChatCompletionFunctionToolParam]:
         """ 返回 MCP 工具和内置工具 """
         mcp_tools = self.mcp_loader.get_list_openai()
-        inside_tools = self.inside_tools.get_list_openai()
+        inside_tools = self.inside_tools._get_list_openai()
         return inside_tools + mcp_tools
 
     def chat(self, messages: list[IlinaMessage]) -> Generator[NodeEvent, None, None]:
@@ -193,7 +198,7 @@ class OpenAIClient:
                 self.log.info(f'调用工具 {call.name}')
                 try:
                     if call.name in self.inside_tools:
-                        result = self.inside_tools.call(call)
+                        result = self.inside_tools._call(call)
                     else:
                         result = self.mcp_loader.call(call)
                 except Exception as e:
@@ -217,5 +222,6 @@ class OpenAIClient:
                 {'role': 'user', 'content': user_input}
             ],
             model=self.model,
+            tools=self.get_tools(),
         )
         return res.choices[0].message.content

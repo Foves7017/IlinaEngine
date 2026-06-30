@@ -154,6 +154,13 @@ A
 对话不再是一条线，而是一张不断生长的思维树。
 
 # 更新日志
+## v0.8.10
+ - 添加了禁用和启用某个工具或MCP的功能：
+   - [`Engine.get_tool_info()`](./docs/engine.md#获取工具信息)：获取所有工具/MCP 的详细信息（名称、是否禁用、工具列表等）
+   - [`Engine.mcp_set_disable()`](./docs/engine.md#设置-mcp-禁用状态)：设置某个 MCP 是否禁用
+   - [`Engine.tool_set_disable()`](./docs/engine.md#设置工具禁用状态)：设置某个工具是否禁用（支持内置工具和 MCP 工具）
+   - [`Engine.reload_mcp()`](./docs/engine.md#重新加载-mcp-服务)：重新加载 MCP 服务和内部工具，使配置变更生效
+
 ## v0.8.9
  - 添加 replace 在替换前后相等时报错
  - 修复了 search_in_file 工具会在二进制文件中查找的BUG

@@ -13,42 +13,41 @@ from FovesConfig import ConfigLoader
 from openai.types.chat import ChatCompletionFunctionToolParam
 from openai.types.shared_params import FunctionDefinition
 
-from .tree import Tree
+from .skill_loader import SkillLoader
 from .type import IlinaToolDefinition, IlinaToolCall
 from .utils import ENGINE_CONFIG_PATH, is_ignored, app_dir
-from .exceptions import ToolNotFoundError, IgnoredFile
+from .exceptions import ToolNotFoundError, IgnoredFile, ToolDisabledError
 from ._config_models import IlinaConfig, EngineConfig
 
 USER_PROFILE_PATH = app_dir()/'configs'/'user_profile.json'
 
 class InsideTools:
     """ 内置工具集合 """
-    def __init__(self, tree: Tree) -> None:
-        self.tree = tree
+    def __init__(self, workpath: Path) -> None:
+        self._workpath = workpath
+        self._tool_table: dict[str, IlinaToolDefinition] = {}
+        self._disabled_tools = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly().disabled_inside_tools
+        self._warning_list = []
 
-        self.tool_table: dict[str, IlinaToolDefinition] = {}
-        
-        self.add_tool(self.list_files)
-        self.add_tool(self.read_file)
-        self.add_tool(self.search_in_file)
-        self.add_tool(self.search_in_dir)
-        self.add_tool(self.replace_in_file)
-        self.add_tool(self.write_to_file)
-        self.add_tool(self.append_to_file)
-        self.add_tool(self.get_datetime)
-        self.add_tool(self.toast)
-        self.add_tool(self.get_workspace_info)
-        self.add_tool(self.get_user_profile)
-        self.add_tool(self.add_user_profile)
-        self.add_tool(self.delete_user_profile)
-        self.add_tool(self.create_folder)
+        self._skill_loader = SkillLoader(workpath)
+        self._warning_list.extend(self._skill_loader.warning_list)
+
+        for name in dir(self):
+            if not name.startswith('_') and isinstance(getattr(self, name), Callable):
+                self._add_tool(getattr(self, name))
     
+    def load_skill(self, name: str) -> str:
+        """ 加载一个 Skill
+        @param name (str): 要加载的 Skill 的名字
+        """
+        return self._skill_loader.load_skill(name=name)
+
     def create_folder(self, path: str) -> str:
         """ 创建文件夹，需要使用相对路径
         @param path (str): 文件夹路径，需要是相对路径
         """
         try:
-            path_ = self.tree.workpath / path
+            path_ = self._workpath / path
             path_.mkdir(parents=True, exist_ok=True)
             return '创建成功'
         except Exception as e:
@@ -154,28 +153,35 @@ class InsideTools:
     def get_workspace_info(self) -> str:
         """ 获取工作区信息，包括路径、记忆、用户偏好等
         """
-        total_info = f'工作路径：{str(self.tree.workpath)}\n\n'
+        total_info = f'# 工作区信息\n## 工作路径\n{str(self._workpath)}\n\n'
 
         # 尝试加载工作区配置
-        config_filename = self.tree.workpath / '.ilina' / '.ilinaconfig'
+        config_filename = self._workpath / '.ilina' / '.ilinaconfig'
         if config_filename.exists():
             config = ConfigLoader(config_filename, IlinaConfig).readonly()
 
-            total_info += f'工作区偏好：\n'
+            total_info += f'## 工作区偏好：\n'
             total_info += f'1. open_after_finish 参数的倾向：' + ('True 不发送通知' if config.open_or_alarm else 'False 并发送通知') + '。编辑记忆文件不需要打开或发送通知。\n'
             total_info += '\n\n'
 
         # 尝试加载记忆
-        memory_filename = self.tree.workpath / '.ilina' / 'ILINA_记忆.md'
+        memory_filename = self._workpath / '.ilina' / 'ILINA_记忆.md'
         if memory_filename.exists():
             with open(memory_filename, 'r', encoding='UTF8') as f:
                 content = f.read()
             
-            total_info += f'记忆内容：\n{content}'
+            total_info += f'## 记忆内容：\n{content}'
             total_info += f'需要在任务完成后修改 `.ilina/ILINA_记忆.md`\n\n'
         else:
             total_info += f'该工作区暂不存在记忆，需要在任务完成后创建到 `.ilina/ILINA_记忆.md`\n\n'
         
+        # 尝试加载 Skill
+        if len(self._skill_loader.metadatas) > 0:
+            total_info += f'## 可用的 Skill\n'
+            for path in self._skill_loader.metadatas:
+                total_info += f'### {self._skill_loader.metadatas[path]['name']}\n'
+                total_info += f'{self._skill_loader.metadatas[path]['description']}\n\n'
+
         return total_info
 
     def list_files(self, path: str='.') -> str:
@@ -184,8 +190,8 @@ class InsideTools:
         """
         try:
             content = f'{path} 的内容:\n'
-            for name in os.listdir(self.tree.workpath / path):
-                fullpath = self.tree.workpath / path / name
+            for name in os.listdir(self._workpath / path):
+                fullpath = self._workpath / path / name
 
                 try:
                     self._check_ignore(fullpath)
@@ -213,7 +219,7 @@ class InsideTools:
         你也许可以利用这些特性。
         """
         try:
-            filepath = self.tree.workpath / filename
+            filepath = self._workpath / filename
             self._check_ignore(filepath)
             with open(filepath, 'r', encoding=encoding) as f:
                 return f.read()[start_chara:end_chara]
@@ -227,7 +233,7 @@ class InsideTools:
         @param encoding (str): 文件编码，默认为 'UTF8'，可以是 Python 支持的任何编码
         """
         try:
-            filepath = self.tree.workpath / filename
+            filepath = self._workpath / filename
 
             self._check_ignore(filepath)
             
@@ -251,8 +257,8 @@ class InsideTools:
         @param encoding (str): 打开文件使用的编码，默认为 'UTF8'，可以是 Python 支持的任何编码
         """
         total = ''
-        for file in os.listdir(self.tree.workpath / path):
-            filename = self.tree.workpath/path/file
+        for file in os.listdir(self._workpath / path):
+            filename = self._workpath/path/file
 
             try:
                 self._check_ignore(filename)
@@ -275,7 +281,7 @@ class InsideTools:
         @param open_after_finish (bool): 替换完成后是否打开文件，默认为 False
         """
         try:
-            filepath = self.tree.workpath / filename
+            filepath = self._workpath / filename
             self._check_ignore(filepath)
             with open(filepath, 'r', encoding=encoding) as f:
                 content = f.read()
@@ -298,7 +304,7 @@ class InsideTools:
         @param open_after_finish (bool): 写入完成后是否打开文件，默认为 False
         """
         try:
-            filepath = self.tree.workpath / filename
+            filepath = self._workpath / filename
             self._check_ignore(filepath)
             filepath.parent.mkdir(exist_ok=True)
             with open(filepath, 'w', encoding=encoding) as f:
@@ -317,7 +323,7 @@ class InsideTools:
         @param open_after_finish (bool): 写入完成后是否打开文件，默认为 False
         """
         try:
-            filepath = self.tree.workpath / filename
+            filepath = self._workpath / filename
             self._check_ignore(filepath)
             with open(filename, 'a', encoding=encoding) as f:
                 f.write(content)
@@ -327,13 +333,15 @@ class InsideTools:
         except Exception as e:
             return repr(e)
     
-    def add_tool(self, tool: Callable):
-        self.tool_table[tool.__name__] = self._func_to_def(tool)
+    def _add_tool(self, tool: Callable):
+        self._tool_table[tool.__name__] = self._func_to_def(tool)
 
-    def get_list_openai(self) -> list[ChatCompletionFunctionToolParam]:
+    def _get_list_openai(self) -> list[ChatCompletionFunctionToolParam]:
         """ 返回可以传给OpenAI模型调用的列表 """
         total: list[ChatCompletionFunctionToolParam] = []
-        for tool in self.tool_table.values():
+        for tool in self._tool_table.values():
+            if tool.name in self._disabled_tools:
+                continue
             total.append(ChatCompletionFunctionToolParam(
                 type='function',
                 function=FunctionDefinition(
@@ -345,10 +353,12 @@ class InsideTools:
     
 
     def __contains__(self, item: str):
-        return isinstance(item, str) and item in self.tool_table
+        return isinstance(item, str) and item in self._tool_table
 
-    def call(self, tool_call: IlinaToolCall) -> str:
+    def _call(self, tool_call: IlinaToolCall) -> str:
         if tool_call.name in self:
+            if tool_call.name in self._disabled_tools:
+                raise ToolDisabledError(tool_call.name)
             func: Callable = getattr(self, tool_call.name)
             return func(**json.loads(tool_call.arguments))
         else:
@@ -386,8 +396,12 @@ class InsideTools:
 
     def _check_ignore(self, path: Path):
         ignores = [*ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly().global_ignores]
-        config_filename = self.tree.workpath / '.ilina' / '.ilinaconfig'
+        config_filename = self._workpath / '.ilina' / '.ilinaconfig'
         if config_filename.exists():
             ignores.extend(ConfigLoader(config_filename, IlinaConfig).readonly().ignores)
         if is_ignored(path, ignores):
             raise IgnoredFile(path)
+    
+    def _name_list(self) -> list [str]:
+        """ 列出所有工具，包括被禁用的工具 """
+        return list(self._tool_table.keys())

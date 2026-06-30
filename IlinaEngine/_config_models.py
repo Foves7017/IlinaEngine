@@ -10,6 +10,7 @@ class MCPConfig(BaseModel):
     command: str
     args: list[str]
     env: dict[str, str] = {}
+    disabled_tools: list[str] = []
 
 class ModelConfig(BaseModel):
     base_url: str
@@ -37,3 +38,4 @@ class EngineConfig(BaseModel):
     mcps: dict[str, MCPConfig] = {}
     mcp_timeout: int = 10  # MCP 连接超时时间
     mcp_ignored: list[str] = []  # 跳过加载的 MCP
+    disabled_inside_tools: list[str] = []  # 被禁用的本地工具名

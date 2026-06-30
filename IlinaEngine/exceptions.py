@@ -24,6 +24,19 @@ class ToolNotFoundError(Exception):
         self.name = name
         super().__init__(f'未找到名为 {name} 的工具')
 
+class ToolDisabledError(Exception):
+    """找到了指定的工具，但该工具被禁用 """
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__(f'名为 {name} 的工具被禁用')
+
+class MCPNotFoundError(Exception):
+    """未找到指定的MCP"""
+
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__(f'未找到名为 {name} 的MCP服务')
+
 class IgnoredFile(Exception):
     """ 遇到了被忽略的文件 """
     

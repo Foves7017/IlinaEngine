@@ -11,6 +11,7 @@ from openai.types.chat import ChatCompletionFunctionToolParam
 from openai.types.shared_params import FunctionDefinition
 from FovesConfig import ConfigLoader
 
+from .exceptions import MCPNotFoundError, ToolNotFoundError, ToolDisabledError
 from .utils import ENGINE_CONFIG_PATH
 from ._ilina_message import IlinaToolDefinition, IlinaToolCall
 from ._config_models import EngineConfig
@@ -177,6 +178,7 @@ class MCPLoader:
         self.warning_list: list[str] = []
         #  从配置中读取MCP工具
         self.clients: dict[str, SyncMcpClient] = {}
+        self.disabled_tools: dict[str, list[str]] = {}
         config = ConfigLoader(ENGINE_CONFIG_PATH, EngineConfig).readonly()
         with LoggedTask('加载 MCP 服务', logger=self.log) as task:
             try:
@@ -191,6 +193,7 @@ class MCPLoader:
                             args=config.mcps[mcp_name].args,
                             cwd=str(workpath),
                             env=config.mcps[mcp_name].env)
+                        self.disabled_tools[mcp_name] = config.mcps[mcp_name].disabled_tools
                         task.checkpoint(f'已加载 {mcp_name}')
                     except Exception as e:
                         if mcp_name in self.clients:
@@ -205,14 +208,15 @@ class MCPLoader:
             log_string += f'{mcp_name}:\n'
             for tool in self.clients[mcp_name].list_tools():
                 log_string += f'  {tool.name}\n'
-        self.log.info(log_string)
+        self.log.debug(log_string)
     
     def get_list_openai(self) -> list[ChatCompletionFunctionToolParam]:
         """ 返回可以传给OpenAI模型调用的列表 """
         total: list[ChatCompletionFunctionToolParam] = []
         for client in self.clients.values():
-            ilina_tools = client.list_tools()
-            for tool in ilina_tools:
+            for tool in client.list_tools():
+                if tool.name[len(client.name)+1:] in self.disabled_tools[client.name]:
+                    continue
                 total.append(ChatCompletionFunctionToolParam(
                     type='function',
                     function=FunctionDefinition(
@@ -226,5 +230,21 @@ class MCPLoader:
         """ 调用MCP工具 """
         for client_name in self.clients:
             if call.name.startswith(client_name):
+                if call.name[len(client_name)+1:] in self.disabled_tools[client_name]:
+                    raise ToolDisabledError(call.name)
                 return self.clients[client_name].call_tool(call.name, json.loads(call.arguments))
-        return f'未找到工具“{call.name}”，请检查名称'
+        raise ToolNotFoundError(call.name)
+    
+    def list_tools(self, mcp_name: str) -> list[str]:
+        """ 列出某个 MCP 的所有工具
+        这里应该返回不带 MCP 前缀的工具名
+        """
+        try:
+            return [tooldef.name[len(mcp_name)+1:] for tooldef in self.clients[mcp_name].list_tools()]
+        except KeyError:
+            raise MCPNotFoundError(mcp_name)
+    
+    def list_mcps(self) -> list[str]:
+        """ 列出加载了的所有MCP的名字
+        """
+        return list(self.clients.keys())
